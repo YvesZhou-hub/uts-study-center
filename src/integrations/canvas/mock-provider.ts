@@ -1,12 +1,12 @@
-import type { Announcement, Assessment, Subject, SubjectModule } from "@/domain/academic/types";
+import type { Announcement, Assessment, CourseFile, Subject, SubjectModule } from "@/domain/academic/types";
 import { buildMockAcademicData } from "./mock-data";
-import type { CanvasProvider, ProviderFile, ProviderUser } from "./provider";
+import type { CanvasProvider, ProviderGrade, ProviderUser } from "./provider";
 
 export class MockCanvasProvider implements CanvasProvider {
   readonly name = "mock" as const;
 
   async getCurrentUser(): Promise<ProviderUser> {
-    return { externalId: "demo-student", name: "Yves" };
+    return { externalId: "demo-student", name: "Demo student" };
   }
 
   async getCourses(): Promise<Subject[]> {
@@ -26,7 +26,11 @@ export class MockCanvasProvider implements CanvasProvider {
     return buildMockAcademicData().announcements.filter((item) => subjectIds.has(item.subjectId));
   }
 
-  async getFiles(): Promise<ProviderFile[]> {
-    return [];
+  async getFiles(subject: Subject): Promise<CourseFile[]> {
+    return buildMockAcademicData().courseFiles.filter((item) => item.subjectId === subject.id);
+  }
+
+  async getGrade(subject: Subject): Promise<ProviderGrade> {
+    return { currentScore: subject.currentScore, finalScore: subject.finalScore };
   }
 }

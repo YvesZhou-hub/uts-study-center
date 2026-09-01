@@ -8,7 +8,11 @@ import { buildMockAcademicData } from "@/integrations/canvas/mock-data";
 import { MockCanvasProvider } from "@/integrations/canvas/mock-provider";
 import { CanvasClient } from "@/integrations/canvas/client";
 import { RestCanvasProvider } from "@/integrations/canvas/provider";
-import { DEFAULT_CANVAS_BASE_URL } from "@/integrations/canvas/config";
+import {
+  assertCanvasHostResolvesPublic,
+  DEFAULT_CANVAS_BASE_URL,
+  parseCanvasConfig,
+} from "@/integrations/canvas/config";
 import {
   loadAcademicData,
   recordSyncState,
@@ -29,12 +33,12 @@ export async function syncConfiguredProvider(): Promise<SyncResult> {
     return { data: await loadAcademicData(), partial: false, failedSections: [] };
   }
 
-  const provider = new RestCanvasProvider(
-    new CanvasClient({
-      baseUrl: process.env.CANVAS_BASE_URL ?? DEFAULT_CANVAS_BASE_URL,
-      accessToken: token,
-    }),
-  );
+  const config = parseCanvasConfig({
+    baseUrl: process.env.CANVAS_BASE_URL ?? DEFAULT_CANVAS_BASE_URL,
+    accessToken: token,
+  });
+  await assertCanvasHostResolvesPublic(config.baseUrl);
+  const provider = new RestCanvasProvider(new CanvasClient(config));
   return syncCanvasProvider(provider);
 }
 
@@ -55,17 +59,21 @@ export async function syncCanvasProvider(provider: CanvasProvider): Promise<Sync
 
   try {
     const subjects = await provider.getCourses();
-    const assignmentResults = await Promise.allSettled(
-      subjects.map((subject) => provider.getAssignments(subject)),
-    );
-    const moduleResults = await Promise.allSettled(
-      subjects.map((subject) => provider.getModules(subject)),
-    );
-    const announcementResult = await Promise.allSettled([
-      provider.getAnnouncements(subjects),
+    const [assignmentResults, moduleResults, fileResults, gradeResults, announcementResult] = await Promise.all([
+      Promise.allSettled(subjects.map((subject) => provider.getAssignments(subject))),
+      Promise.allSettled(subjects.map((subject) => provider.getModules(subject))),
+      Promise.allSettled(subjects.map((subject) => provider.getFiles(subject))),
+      Promise.allSettled(subjects.map((subject) => provider.getGrade(subject))),
+      Promise.allSettled([provider.getAnnouncements(subjects)]),
     ]);
 
     const failedSections: string[] = [];
+    const syncedSubjects = subjects.map((subject, index) => {
+      const result = gradeResults[index];
+      if (result.status === "fulfilled") return { ...subject, ...result.value };
+      failedSections.push(`grades:${subject.externalId}`);
+      return subject;
+    });
     const assessments = assignmentResults.flatMap((result, index) => {
       if (result.status === "fulfilled") return result.value;
       failedSections.push(`assignments:${subjects[index].externalId}`);
@@ -74,6 +82,11 @@ export async function syncCanvasProvider(provider: CanvasProvider): Promise<Sync
     const modules = moduleResults.flatMap((result, index) => {
       if (result.status === "fulfilled") return result.value;
       failedSections.push(`modules:${subjects[index].externalId}`);
+      return [];
+    });
+    const courseFiles = fileResults.flatMap((result, index) => {
+      if (result.status === "fulfilled") return result.value;
+      failedSections.push(`files:${subjects[index].externalId}`);
       return [];
     });
     const announcements = announcementResult[0].status === "fulfilled"
@@ -86,14 +99,15 @@ export async function syncCanvasProvider(provider: CanvasProvider): Promise<Sync
       entityType: "all",
       state: failedSections.length > 0 ? "PARTIAL" : "SUCCESS",
       lastAttemptedAt: attemptedAt,
-      lastSuccessfulAt: completedAt,
+      lastSuccessfulAt: failedSections.length === 0 ? completedAt : undefined,
       errorCode: failedSections.length > 0 ? "SYNC_FAILED" : undefined,
     };
     const data: AcademicData = {
-      subjects,
+      subjects: syncedSubjects,
       assessments,
       announcements,
       modules,
+      courseFiles,
       timetableEvents: [],
       studyTopics: [],
       subjectNotes: {},

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpenCheck, BrainCircuit, CheckCircle2, CircleAlert, RotateCcw, Save } from "lucide-react";
+import { BookOpenCheck, BrainCircuit, CheckCircle2, CircleAlert, Plus, RotateCcw, Save } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { StudyTopic } from "@/domain/academic/types";
 import { useAcademicData } from "@/components/providers/academic-data-provider";
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
@@ -20,10 +21,24 @@ import type { ApplicationErrorCode } from "@/lib/errors";
 
 export function StudyPage() {
   const t = useTranslations();
-  const { data } = useAcademicData();
+  const { createTopic, data } = useAcademicData();
   const [subjectFilter, setSubjectFilter] = useState("all");
+  const [newSubjectId, setNewSubjectId] = useState(data.subjects[0]?.id ?? "");
+  const [newTitle, setNewTitle] = useState("");
+  const [createState, setCreateState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const topics = data.studyTopics.filter((topic) => subjectFilter === "all" || topic.subjectId === subjectFilter);
   const needsReview = topics.filter((topic) => !topic.nextReviewAt || new Date(topic.nextReviewAt) <= new Date()).length;
+
+  const addTopic = async () => {
+    setCreateState("saving");
+    const result = await createTopic({ subjectId: newSubjectId, title: newTitle });
+    if (result.ok) {
+      setNewTitle("");
+      setCreateState("saved");
+    } else {
+      setCreateState("error");
+    }
+  };
 
   return (
     <>
@@ -32,6 +47,35 @@ export function StudyPage() {
         description={t("study.subtitle")}
         actions={<Badge variant={needsReview > 0 ? "destructive" : "secondary"}>{t("study.needsReview")} · {needsReview}</Badge>}
       />
+
+      <Card className="mb-5 shadow-none">
+        <CardContent className="p-4 sm:p-5">
+          <div className="mb-3">
+            <h2 className="text-sm font-semibold">{t("study.addTopic")}</h2>
+            <p className="mt-1 text-xs text-muted-foreground">{t("study.addTopicDescription")}</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)_auto] sm:items-end">
+            <div>
+              <Label htmlFor="new-topic-subject" className="mb-1.5 block text-xs">{t("assessments.subject")}</Label>
+              <Select value={newSubjectId} onValueChange={(value) => { setNewSubjectId(value); setCreateState("idle"); }}>
+                <SelectTrigger id="new-topic-subject" className="w-full" aria-label={t("assessments.subject")}><SelectValue /></SelectTrigger>
+                <SelectContent>{data.subjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.code}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="new-topic-title" className="mb-1.5 block text-xs">{t("study.topicTitle")}</Label>
+              <Input id="new-topic-title" value={newTitle} maxLength={200} placeholder={t("study.topicTitlePlaceholder")} onChange={(event) => { setNewTitle(event.target.value); setCreateState("idle"); }} onKeyDown={(event) => { if (event.key === "Enter" && newTitle.trim()) { event.preventDefault(); void addTopic(); } }} />
+            </div>
+            <Button type="button" disabled={!newSubjectId || !newTitle.trim() || createState === "saving"} onClick={addTopic}>
+              <Plus aria-hidden="true" className="size-4" />
+              {createState === "saving" ? t("loading.saving") : t("study.createTopic")}
+            </Button>
+          </div>
+          <div aria-live="polite" className="mt-2 min-h-5 text-xs">
+            {createState === "saved" ? <span className="text-emerald-700 dark:text-emerald-400">{t("study.topicCreated")}</span> : createState === "error" ? <span className="text-destructive">{t("errors.VALIDATION_FAILED")}</span> : null}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="mb-5 max-w-xs">
         <Label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("assessments.filterBySubject")}</Label>

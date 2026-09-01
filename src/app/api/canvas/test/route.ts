@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { CanvasClient } from "@/integrations/canvas/client";
-import { parseCanvasConfig } from "@/integrations/canvas/config";
+import { assertCanvasHostResolvesPublic, parseCanvasConfig } from "@/integrations/canvas/config";
 import { RestCanvasProvider } from "@/integrations/canvas/provider";
 import { toApplicationError } from "@/lib/errors";
 import { logEvent } from "@/lib/logger";
+import { assertTrustedMutation } from "@/lib/http-security";
 
 export async function POST(request: Request) {
   try {
+    assertTrustedMutation(request, 8_192);
     const config = parseCanvasConfig(await request.json());
+    await assertCanvasHostResolvesPublic(config.baseUrl);
     const provider = new RestCanvasProvider(new CanvasClient(config));
     const user = await provider.getCurrentUser();
     logEvent("info", "canvas.connection.succeeded", {

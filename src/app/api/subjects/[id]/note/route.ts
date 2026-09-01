@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { loadAcademicData, saveSubjectNote } from "@/repositories/academic-repository";
 import { toApplicationError } from "@/lib/errors";
+import { assertTrustedMutation } from "@/lib/http-security";
 
 const payloadSchema = z.object({ body: z.string().max(20_000) });
 
@@ -10,6 +11,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    assertTrustedMutation(request, 24_000);
     const { id } = await params;
     const { body } = payloadSchema.parse(await request.json());
     await saveSubjectNote(id, body);

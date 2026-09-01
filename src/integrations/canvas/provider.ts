@@ -1,6 +1,7 @@
 import type {
   Announcement,
   Assessment,
+  CourseFile,
   Subject,
   SubjectModule,
 } from "@/domain/academic/types";
@@ -9,27 +10,37 @@ import {
   mapCanvasAnnouncement,
   mapCanvasAssignment,
   mapCanvasCourse,
+  mapCanvasFile,
   mapCanvasModule,
 } from "./mapper";
 import type {
   CanvasAssignmentDto,
   CanvasCourseDto,
   CanvasDiscussionTopicDto,
+  CanvasEnrollmentDto,
   CanvasFileDto,
   CanvasModuleDto,
   CanvasUserDto,
 } from "./types";
+import {
+  canvasAnnouncementSchema,
+  canvasAssignmentSchema,
+  canvasCourseSchema,
+  canvasFileSchema,
+  canvasEnrollmentSchema,
+  canvasModuleSchema,
+  canvasUserSchema,
+  parseCanvasPayload,
+} from "./schemas";
 
 export interface ProviderUser {
   externalId: string;
   name: string;
 }
 
-export interface ProviderFile {
-  externalId: string;
-  name: string;
-  url: string;
-  contentType?: string;
+export interface ProviderGrade {
+  currentScore?: number;
+  finalScore?: number;
 }
 
 export interface CanvasProvider {
@@ -39,7 +50,8 @@ export interface CanvasProvider {
   getAssignments(subject: Subject): Promise<Assessment[]>;
   getModules(subject: Subject): Promise<SubjectModule[]>;
   getAnnouncements(subjects: Subject[]): Promise<Announcement[]>;
-  getFiles(subject: Subject): Promise<ProviderFile[]>;
+  getFiles(subject: Subject): Promise<CourseFile[]>;
+  getGrade(subject: Subject): Promise<ProviderGrade | undefined>;
 }
 
 export class RestCanvasProvider implements CanvasProvider {
@@ -48,39 +60,57 @@ export class RestCanvasProvider implements CanvasProvider {
   constructor(private readonly client: CanvasClient) {}
 
   async getCurrentUser(): Promise<ProviderUser> {
-    const user = await this.client.get<CanvasUserDto>("users/self");
+    const user = parseCanvasPayload(
+      canvasUserSchema,
+      await this.client.get<unknown>("users/self"),
+      "user",
+    ) satisfies CanvasUserDto;
     return { externalId: String(user.id), name: user.name };
   }
 
   async getCourses(): Promise<Subject[]> {
-    const courses = await this.client.getAll<CanvasCourseDto>("courses", {
-      enrollment_state: "active",
-      state: "available",
-    });
+    const courses = parseCanvasPayload(
+      canvasCourseSchema.array(),
+      await this.client.getAll<unknown>("courses", {
+        enrollment_state: "active",
+        state: "available",
+      }),
+      "courses",
+    ) satisfies CanvasCourseDto[];
     return courses.map(mapCanvasCourse);
   }
 
   async getAssignments(subject: Subject): Promise<Assessment[]> {
-    const assignments = await this.client.getAll<CanvasAssignmentDto>(
-      `courses/${subject.externalId}/assignments`,
-      { "include[]": "submission" },
-    );
+    const assignments = parseCanvasPayload(
+      canvasAssignmentSchema.array(),
+      await this.client.getAll<unknown>(`courses/${subject.externalId}/assignments`, {
+        "include[]": "submission",
+      }),
+      "assignments",
+    ) satisfies CanvasAssignmentDto[];
     return assignments.map((assignment) => mapCanvasAssignment(assignment, subject));
   }
 
   async getModules(subject: Subject): Promise<SubjectModule[]> {
-    const modules = await this.client.getAll<CanvasModuleDto>(
-      `courses/${subject.externalId}/modules`,
-      { "include[]": "items" },
-    );
+    const modules = parseCanvasPayload(
+      canvasModuleSchema.array(),
+      await this.client.getAll<unknown>(`courses/${subject.externalId}/modules`, {
+        "include[]": "items",
+      }),
+      "modules",
+    ) satisfies CanvasModuleDto[];
     return modules.map((module) => mapCanvasModule(module, subject.id));
   }
 
   async getAnnouncements(subjects: Subject[]): Promise<Announcement[]> {
     if (subjects.length === 0) return [];
-    const announcements = await this.client.getAll<CanvasDiscussionTopicDto>("announcements", {
-      "context_codes[]": subjects.map((subject) => `course_${subject.externalId}`),
-    });
+    const announcements = parseCanvasPayload(
+      canvasAnnouncementSchema.array(),
+      await this.client.getAll<unknown>("announcements", {
+        "context_codes[]": subjects.map((subject) => `course_${subject.externalId}`),
+      }),
+      "announcements",
+    ) satisfies CanvasDiscussionTopicDto[];
     const byExternalId = new Map(subjects.map((subject) => [subject.externalId, subject]));
     return announcements.flatMap((announcement) => {
       const externalSubjectId = announcement.context_code?.replace("course_", "");
@@ -89,13 +119,29 @@ export class RestCanvasProvider implements CanvasProvider {
     });
   }
 
-  async getFiles(subject: Subject): Promise<ProviderFile[]> {
-    const files = await this.client.getAll<CanvasFileDto>(`courses/${subject.externalId}/files`);
-    return files.map((file) => ({
-      externalId: String(file.id),
-      name: file.display_name,
-      url: file.url,
-      contentType: file.content_type,
-    }));
+  async getFiles(subject: Subject): Promise<CourseFile[]> {
+    const files = parseCanvasPayload(
+      canvasFileSchema.array(),
+      await this.client.getAll<unknown>(`courses/${subject.externalId}/files`),
+      "files",
+    ) satisfies CanvasFileDto[];
+    return files.map((file) => mapCanvasFile(file, subject));
+  }
+
+  async getGrade(subject: Subject): Promise<ProviderGrade | undefined> {
+    const enrollments = parseCanvasPayload(
+      canvasEnrollmentSchema.array(),
+      await this.client.getAll<unknown>(`courses/${subject.externalId}/enrollments`, {
+        "type[]": "StudentEnrollment",
+        user_id: "self",
+      }),
+      "enrolments",
+    ) satisfies CanvasEnrollmentDto[];
+    const enrollment = enrollments.find((item) => item.type === "StudentEnrollment") ?? enrollments[0];
+    if (!enrollment) return undefined;
+    return {
+      currentScore: enrollment.computed_current_score ?? undefined,
+      finalScore: enrollment.computed_final_score ?? undefined,
+    };
   }
 }

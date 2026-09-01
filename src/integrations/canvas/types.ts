@@ -62,6 +62,8 @@ export interface CanvasFileDto {
   display_name: string;
   url: string;
   content_type?: string;
+  size?: number;
+  updated_at?: string;
 }
 
 export interface CanvasEnrollmentDto {

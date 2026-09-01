@@ -80,7 +80,7 @@ function GeneralSettings() {
 
 function CanvasSettings() {
   const t = useTranslations();
-  const { data, syncNow } = useAcademicData();
+  const { data, persistenceMode, syncNow } = useAcademicData();
   const [baseUrl, setBaseUrl] = useState(DEFAULT_CANVAS_BASE_URL);
   const [token, setToken] = useState("");
   const [connectionState, setConnectionState] = useState<"idle" | "testing" | "success" | "error">("idle");
@@ -135,9 +135,10 @@ function CanvasSettings() {
         <div className="space-y-2"><Label htmlFor="canvas-url">{t("settings.baseUrl")}</Label><Input id="canvas-url" type="url" value={baseUrl} onChange={(event) => { setBaseUrl(event.target.value); setConnectionState("idle"); }} autoComplete="url" /></div>
         <div className="space-y-2"><Label htmlFor="canvas-token">{t("settings.accessToken")}</Label><div className="relative"><KeyRound aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="canvas-token" type="password" value={token} onChange={(event) => { setToken(event.target.value); setConnectionState("idle"); }} placeholder={t("settings.tokenPlaceholder")} autoComplete="off" className="pl-9" /></div></div>
         <Alert><LockKeyhole aria-hidden="true" /><AlertTitle>{t("settings.localFirst")}</AlertTitle><AlertDescription>{t("settings.tokenSecurity")}</AlertDescription></Alert>
+        {persistenceMode === "browser" ? <Alert><CloudCog aria-hidden="true" /><AlertTitle>{t("settings.hostedDemo")}</AlertTitle><AlertDescription>{t("settings.hostedSyncUnavailable")}</AlertDescription></Alert> : null}
         {connectionState === "success" ? <InlineState success text={t("settings.connectionSuccess")} /> : connectionState === "error" ? <InlineState text={t(`errors.${errorCode ?? "UNKNOWN"}`)} /> : null}
         {syncState === "success" ? <InlineState success text={t("settings.syncComplete")} /> : syncState === "partial" ? <InlineState text={t("sync.partial")} /> : syncState === "error" ? <InlineState text={t(`errors.${errorCode ?? "UNKNOWN"}`)} /> : null}
-        <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={!token || connectionState === "testing"} onClick={testConnection}>{connectionState === "testing" ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : <ShieldCheck aria-hidden="true" className="size-4" />}{connectionState === "testing" ? t("settings.testingConnection") : t("settings.testConnection")}</Button><Button type="button" disabled={syncState === "syncing"} onClick={synchronize}>{syncState === "syncing" ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : <DatabaseZap aria-hidden="true" className="size-4" />}{syncState === "syncing" ? t("settings.syncing") : t("settings.syncNow")}</Button></div>
+        <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={!token || connectionState === "testing"} onClick={testConnection}>{connectionState === "testing" ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : <ShieldCheck aria-hidden="true" className="size-4" />}{connectionState === "testing" ? t("settings.testingConnection") : t("settings.testConnection")}</Button><Button type="button" disabled={persistenceMode === "browser" || syncState === "syncing"} onClick={synchronize}>{syncState === "syncing" ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : <DatabaseZap aria-hidden="true" className="size-4" />}{syncState === "syncing" ? t("settings.syncing") : t("settings.syncNow")}</Button></div>
       </CardContent>
     </Card>
   );

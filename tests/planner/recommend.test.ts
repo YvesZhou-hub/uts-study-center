@@ -30,6 +30,13 @@ describe("recommendTasks", () => {
     expect(result[0].taskId).toBe("urgent");
     expect(result[0].reasons).toEqual(expect.arrayContaining(["DUE_SOON", "LOW_PROGRESS", "HIGH_WEIGHT"]));
   });
+
+  it("uses the Sydney calendar day at the UTC date boundary", () => {
+    const afterMidnightInSydney = new Date("2026-08-30T14:30:00Z");
+    const dueLaterThatSydneyDay = assessment("sydney-today", "2026-08-31T03:00:00Z", 50);
+    const [result] = recommendTasks({ assessments: [dueLaterThatSydneyDay], now: afterMidnightInSydney });
+    expect(result.reasons).toContain("DUE_TODAY");
+  });
 });
 
 function assessment(

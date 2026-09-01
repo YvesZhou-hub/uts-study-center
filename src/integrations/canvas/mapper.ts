@@ -1,6 +1,7 @@
 import type {
   Announcement,
   Assessment,
+  CourseFile,
   OfficialAssessmentStatus,
   Subject,
   SubjectModule,
@@ -9,6 +10,7 @@ import type {
   CanvasAssignmentDto,
   CanvasCourseDto,
   CanvasDiscussionTopicDto,
+  CanvasFileDto,
   CanvasModuleDto,
   CanvasSubmissionDto,
 } from "./types";
@@ -88,6 +90,20 @@ export function mapCanvasModule(dto: CanvasModuleDto, subjectId: string): Subjec
       title: item.title,
       type: item.type,
     })),
+  };
+}
+
+export function mapCanvasFile(dto: CanvasFileDto, subject: Subject): CourseFile {
+  return {
+    id: `canvas-file-${dto.id}`,
+    provider: "canvas",
+    externalId: String(dto.id),
+    subjectId: subject.id,
+    name: dto.display_name,
+    url: dto.url,
+    contentType: dto.content_type,
+    size: dto.size,
+    updatedAt: dto.updated_at,
   };
 }
 

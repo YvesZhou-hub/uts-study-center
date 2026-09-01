@@ -7,6 +7,7 @@ import {
   BookMarked,
   CheckCircle2,
   ExternalLink,
+  FileText,
   FolderOpen,
   LockKeyhole,
   Save,
@@ -45,6 +46,7 @@ export function SubjectDetailPage({ subjectId }: { subjectId: string }) {
   const assessments = data.assessments.filter((item) => item.subjectId === subject.id);
   const announcements = data.announcements.filter((item) => item.subjectId === subject.id);
   const modules = data.modules.filter((item) => item.subjectId === subject.id);
+  const files = data.courseFiles.filter((item) => item.subjectId === subject.id);
   const topics = data.studyTopics.filter((item) => item.subjectId === subject.id);
 
   const saveNote = async () => {
@@ -70,6 +72,7 @@ export function SubjectDetailPage({ subjectId }: { subjectId: string }) {
           </div>
         </div>
         <div className="w-full sm:w-56">
+          {subject.currentScore !== undefined ? <Badge variant="outline" className="mb-3 font-normal">{t("subjects.currentGrade", { value: format.formatPercent(subject.currentScore) })}</Badge> : null}
           <div className="mb-2 flex justify-between text-xs text-muted-foreground"><span>{t("common.progress")}</span><span className="font-mono">{subject.progress}%</span></div>
           <Progress value={subject.progress} className="h-1.5" aria-label={t("accessibility.subjectProgress", { subject: subject.code, value: subject.progress })} />
         </div>
@@ -148,7 +151,39 @@ export function SubjectDetailPage({ subjectId }: { subjectId: string }) {
         </TabsContent>
 
         <TabsContent value="files" className="mt-0">
-          <EmptyState icon={FolderOpen} title={t("subjects.filesUnavailable")} />
+          {files.length > 0 ? (
+            <Card className="shadow-none">
+              <CardContent className="divide-y p-0">
+                {files.map((file) => (
+                  <div key={file.id} className="flex items-center gap-3 p-4 sm:px-5">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                      <FileText aria-hidden="true" className="size-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{file.name}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {fileTypeLabel(file.contentType, t)}
+                        {file.size ? ` · ${format.formatFileSize(file.size)}` : null}
+                        {file.updatedAt ? ` · ${t("common.updated", { date: format.formatDate(file.updatedAt) })}` : null}
+                      </p>
+                    </div>
+                    {file.url ? (
+                      <Button asChild variant="outline" size="sm">
+                        <a href={file.url} target="_blank" rel="noreferrer" aria-label={t("subjects.openFile", { file: file.name })}>
+                          {t("subjects.openFileAction")}
+                          <ExternalLink aria-hidden="true" className="size-3.5" />
+                        </a>
+                      </Button>
+                    ) : (
+                      <Badge variant="secondary" className="font-normal">{t("common.mockMode")}</Badge>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : (
+            <EmptyState icon={FolderOpen} title={t("subjects.filesUnavailable")} />
+          )}
         </TabsContent>
 
         <TabsContent value="studyTopics" className="mt-0 grid gap-3 sm:grid-cols-2">
@@ -163,4 +198,16 @@ export function SubjectDetailPage({ subjectId }: { subjectId: string }) {
       </Tabs>
     </>
   );
+}
+
+function fileTypeLabel(
+  contentType: string | undefined,
+  t: ReturnType<typeof useTranslations>,
+): string {
+  if (contentType === "application/pdf") return t("subjects.fileTypePdf");
+  if (contentType?.includes("wordprocessingml") || contentType === "application/msword") {
+    return t("subjects.fileTypeDocument");
+  }
+  if (contentType === "text/csv") return t("subjects.fileTypeData");
+  return t("subjects.fileTypeOther");
 }

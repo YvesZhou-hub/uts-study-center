@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { loadAcademicData, updateAssessmentProgress } from "@/repositories/academic-repository";
 import { toApplicationError } from "@/lib/errors";
+import { assertTrustedMutation } from "@/lib/http-security";
 
 const payloadSchema = z.object({
   workflowStatus: z.enum(["NOT_STARTED", "IN_PROGRESS", "READY_TO_SUBMIT", "SUBMITTED", "GRADED"]),
@@ -15,6 +16,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    assertTrustedMutation(request, 8_192);
     const { id } = await params;
     const values = payloadSchema.parse(await request.json());
     await updateAssessmentProgress(id, values);

@@ -28,16 +28,35 @@ model Subject {
   color           String?
   current         Boolean             @default(true)
   progress        Int                 @default(0)
+  currentScore    Float?
+  finalScore      Float?
   sourceUrl       String?
   updatedAt       DateTime            @updatedAt
   assessments     Assessment[]
   announcements   AnnouncementCache[]
   modules         ModuleCache[]
+  files           CourseFileCache[]
   studyTopics     StudyTopic[]
   timetableEvents TimetableEvent[]
 
   @@unique([provider, externalId])
   @@index([code])
+}
+
+model CourseFileCache {
+  id          String   @id @default(cuid())
+  provider    String
+  externalId  String
+  subjectId   String
+  name        String
+  url         String?
+  contentType String?
+  size        Int?
+  updatedAt   DateTime?
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalId])
+  @@index([subjectId, name])
 }
 
 model Assessment {
@@ -131,6 +150,7 @@ model StudyTopic {
   notes        String    @default("")
   lastReviewed DateTime?
   nextReviewAt DateTime?
+  userCreated  Boolean   @default(false)
   subject      Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
   @@index([subjectId, nextReviewAt])

@@ -57,12 +57,13 @@ Create a personal Canvas access token in Canvas and set these server-only variab
 
 ```dotenv
 CANVAS_BASE_URL="https://canvas.uts.edu.au"
+CANVAS_ALLOWED_HOSTS="canvas.uts.edu.au"
 CANVAS_ACCESS_TOKEN=""
 ```
 
-The Settings connection test sends a token only to the local server for that explicit request. It does not persist the token. Continuous sync reads `CANVAS_ACCESS_TOKEN` from the server environment through the credential-store interface. Canvas DTOs are mapped into internal models before persistence.
+The Settings connection test sends a token only to the server for that explicit request. It does not persist the token. Continuous sync reads `CANVAS_ACCESS_TOKEN` from the server environment through the credential-store interface. Canvas hosts must be explicitly allowlisted with `CANVAS_ALLOWED_HOSTS`, resolve only to public IP addresses, and use HTTPS. Canvas DTOs are runtime-validated and mapped into internal models before persistence.
 
-Sync is manual in this MVP. It fetches courses first, then handles assignments, modules, and announcements independently. A section failure does not discard cached data from other sections.
+Sync is manual in this MVP. It fetches courses first, then handles assignments, modules, files, and announcements independently. Requests use bounded retries, response and pagination limits, and same-origin pagination enforcement. A section failure does not discard cached data from other sections.
 
 ## Timetable import
 
@@ -98,7 +99,7 @@ No academic content is sent to an AI provider automatically.
 
 SQLite data is stored in `data/uts-study-center.db` and is excluded from Git. Prisma separates cached provider entities from personal assessment progress, study topics, notes, preferences, sync state, timetable events, and AI cache metadata. Provider external IDs use unique constraints but are not application primary keys.
 
-On Vercel, the application deliberately switches to browser-local persistence rather than writing SQLite inside a serverless function. Only personal progress, notes, topic state, and imported ICS events are stored in that browser. Source mock data is refreshed independently and local overlays cannot replace official source fields. This hosted mode is a private demo workspace, not a multi-user cloud account.
+On Vercel, the application deliberately switches to browser-local persistence rather than writing SQLite inside a serverless function. Personal progress, notes, user-created study topics, topic state, and imported ICS events are stored in that browser. Source mock data is refreshed independently and local overlays cannot replace official source fields. This hosted mode is a private demo workspace, not a multi-user cloud account.
 
 ## Vercel deployment
 
@@ -114,9 +115,11 @@ Validate the preview with `vercel curl`, then promote the same tested artifact. 
 ## Security
 
 - Secrets are server-only, ignored by Git, redacted from structured logs, and never returned to the browser after a request.
-- The Canvas test requires HTTPS and rejects localhost, `.local`, and IP-literal hosts. A public deployment should add a DNS-resolution SSRF guard or a university-host allowlist.
+- The Canvas test requires HTTPS, an explicit hostname allowlist, public DNS resolution, same-origin pagination, and bounded response sizes. Mutation routes reject cross-site browser requests.
 - Canvas content is rendered as text, not injected as HTML.
+- Production responses include CSP, frame denial, MIME sniffing prevention, a restrictive permissions policy, and no-index metadata.
 - No telemetry, analytics, advertising, or tracking SDK is installed.
+- `/api/health` reports only deployment health and feature availability; it never returns credentials or academic content.
 - The credential interface is ready for encrypted local storage or OS keychains. The web MVP intentionally uses a read-only environment implementation.
 - Before a multi-user public release, add authentication, authorization, CSRF review, per-user encryption, rate limits, secret rotation, and a managed Postgres deployment.
 
@@ -126,7 +129,7 @@ The Vitest suite covers deterministic priority scoring, translation-key parity, 
 
 ## Known limitations
 
-- Canvas sync supports core course, assignment, module, announcement, and file provider methods; UI file browsing and grade views await live-permission validation.
+- Canvas sync supports core course, assignment, module, announcement, and file data; grade views still await live-permission validation.
 - Timetable feed polling and background sync are not enabled.
 - The SQLite database is device-local and single-user.
 - The Vercel demo stores personal data only in the current browser; it does not sync between browsers or devices.

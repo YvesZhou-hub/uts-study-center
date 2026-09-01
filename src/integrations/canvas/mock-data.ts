@@ -3,6 +3,7 @@ import type {
   AcademicData,
   Announcement,
   Assessment,
+  CourseFile,
   StudyTopic,
   Subject,
   SubjectModule,
@@ -11,6 +12,7 @@ import type {
 } from "@/domain/academic/types";
 import { recommendTasks } from "@/domain/planner/recommend";
 import { timetableFingerprint } from "@/integrations/timetable/fingerprint";
+import { DEFAULT_CANVAS_BASE_URL } from "@/integrations/canvas/constants";
 
 export function buildMockAcademicData(now = new Date()): AcademicData {
   const subjects: Subject[] = [
@@ -100,6 +102,14 @@ export function buildMockAcademicData(now = new Date()): AcademicData {
     module(subjects[3], "comm-m1", "Module 4 · Professional reports", 4, ["Audience analysis", "Report structure"]),
   ];
 
+  const courseFiles: CourseFile[] = [
+    courseFile(subjects[0], "de-rubric", "Assessment 2 rubric.pdf", "application/pdf", 284_160),
+    courseFile(subjects[0], "de-lab-data", "Week 5 lab dataset.csv", "text/csv", 91_244),
+    courseFile(subjects[1], "prog-reference", "Arrays and objects reference.pdf", "application/pdf", 412_380),
+    courseFile(subjects[2], "web-api-spec", "REST API project specification.pdf", "application/pdf", 336_042),
+    courseFile(subjects[3], "comm-template", "Professional report template.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", 58_300),
+  ];
+
   const timetableEvents = buildMockTimetable(subjects, now);
   const studyTopics: StudyTopic[] = [
     topic(subjects[0], "topic-star-schema", "Star schema and dimensional modelling", 3, 60, subDays(now, 2), addDays(now, 2)),
@@ -114,6 +124,7 @@ export function buildMockAcademicData(now = new Date()): AcademicData {
     assessments,
     announcements,
     modules,
+    courseFiles,
     timetableEvents,
     studyTopics,
     subjectNotes: {},
@@ -130,6 +141,25 @@ export function buildMockAcademicData(now = new Date()): AcademicData {
   };
 }
 
+function courseFile(
+  subjectValue: Subject,
+  id: string,
+  name: string,
+  contentType: string,
+  size: number,
+): CourseFile {
+  return {
+    id: `mock-file-${id}`,
+    provider: "mock",
+    externalId: id,
+    subjectId: subjectValue.id,
+    name,
+    contentType,
+    size,
+    updatedAt: subDays(new Date(), 2).toISOString(),
+  };
+}
+
 function subject(code: string, name: string, color: string, progress: number): Subject {
   return {
     id: `mock-subject-${code}`,
@@ -139,7 +169,8 @@ function subject(code: string, name: string, color: string, progress: number): S
     name,
     color,
     progress,
-    sourceUrl: `https://canvas.uts.edu.au/courses/${code}`,
+    currentScore: Math.min(100, progress + 6),
+    sourceUrl: `${DEFAULT_CANVAS_BASE_URL}/courses/${code}`,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -167,7 +198,7 @@ function assessment(
     completion: 0,
     notes: "",
     pinned: false,
-    htmlUrl: `https://canvas.uts.edu.au/courses/${subjectValue.externalId}/assignments/${id}`,
+    htmlUrl: `${DEFAULT_CANVAS_BASE_URL}/courses/${subjectValue.externalId}/assignments/${id}`,
     sourceUpdatedAt: subDays(new Date(), 1).toISOString(),
     ...values,
   };
@@ -190,7 +221,7 @@ function announcement(
     title,
     message,
     publishedAt: publishedAt.toISOString(),
-    htmlUrl: `https://canvas.uts.edu.au/courses/${subjectValue.externalId}/announcements/${id}`,
+    htmlUrl: `${DEFAULT_CANVAS_BASE_URL}/courses/${subjectValue.externalId}/announcements/${id}`,
     unread,
   };
 }

@@ -25,6 +25,14 @@ const studyTopicProgressSchema = z.object({
   nextReviewAt: z.string().optional(),
 });
 
+const createdStudyTopicSchema = studyTopicProgressSchema.extend({
+  id: z.string(),
+  subjectId: z.string(),
+  subjectCode: z.string(),
+  title: z.string().min(1).max(200),
+  userCreated: z.literal(true),
+});
+
 const timetableEventSchema = z.object({
   id: z.string(),
   fingerprint: z.string(),
@@ -44,6 +52,7 @@ const localAcademicStateSchema = z.object({
   version: z.literal(1),
   assessments: z.record(z.string(), assessmentProgressSchema),
   studyTopics: z.record(z.string(), studyTopicProgressSchema),
+  createdStudyTopics: z.array(createdStudyTopicSchema).max(1_000).default([]),
   subjectNotes: z.record(z.string(), z.string().max(20_000)),
   timetableEvents: z.array(timetableEventSchema).max(10_000),
 });
@@ -76,6 +85,9 @@ export function extractLocalAcademicState(data: AcademicData): LocalAcademicStat
         },
       ]),
     ),
+    createdStudyTopics: data.studyTopics.flatMap((topic) =>
+      topic.userCreated ? [{ ...topic, userCreated: true as const }] : [],
+    ),
     subjectNotes: data.subjectNotes,
     timetableEvents: data.timetableEvents.filter(
       (event): event is TimetableEvent & { provider: "ics" } => event.provider === "ics",
@@ -93,7 +105,13 @@ export function applyLocalAcademicState(
     ...assessment,
     ...(localState.assessments[assessment.id] ?? {}),
   }));
-  const studyTopics = sourceData.studyTopics.map((topic) => ({
+  const topicSources = Array.from(new Map(
+    [
+      ...sourceData.studyTopics,
+      ...localState.createdStudyTopics.filter((topic) => subjectIds.has(topic.subjectId)),
+    ].map((topic) => [topic.id, topic]),
+  ).values());
+  const studyTopics = topicSources.map((topic) => ({
     ...topic,
     ...(localState.studyTopics[topic.id] ?? {}),
   }));

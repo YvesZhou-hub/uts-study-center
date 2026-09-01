@@ -27,6 +27,7 @@ export type PersistenceMode = "server" | "browser";
 
 interface AcademicDataContextValue {
   data: AcademicData;
+  persistenceMode: PersistenceMode;
   saveAssessment: (input: {
     id: string;
     workflowStatus: AssessmentWorkflowStatus;
@@ -40,6 +41,10 @@ interface AcademicDataContextValue {
     completion: number;
     notes: string;
     markReviewed: boolean;
+  }) => Promise<{ ok: boolean; errorCode?: ApplicationErrorCode }>;
+  createTopic: (input: {
+    subjectId: string;
+    title: string;
   }) => Promise<{ ok: boolean; errorCode?: ApplicationErrorCode }>;
   saveSubjectNote: (
     subjectId: string,
@@ -157,6 +162,39 @@ export function AcademicDataProvider({
     [commitBrowserData, persistenceMode, replaceData],
   );
 
+  const createTopic = useCallback<AcademicDataContextValue["createTopic"]>(
+    async ({ subjectId, title }) => {
+      const subject = dataRef.current.subjects.find((item) => item.id === subjectId);
+      const normalizedTitle = title.trim();
+      if (!subject || !normalizedTitle || normalizedTitle.length > 200) {
+        return { ok: false, errorCode: "VALIDATION_FAILED" };
+      }
+      if (persistenceMode === "browser") {
+        const saved = commitBrowserData((current) => ({
+          ...current,
+          studyTopics: [
+            {
+              id: `local-topic-${globalThis.crypto.randomUUID()}`,
+              subjectId,
+              subjectCode: subject.code,
+              title: normalizedTitle,
+              confidence: 1,
+              completion: 0,
+              notes: "",
+              userCreated: true,
+            },
+            ...current.studyTopics,
+          ],
+        }));
+        return saved ? { ok: true } : { ok: false, errorCode: "UNKNOWN" };
+      }
+      const result = await mutateData("/api/study-topics", "POST", { subjectId, title: normalizedTitle });
+      if (result.ok) replaceData(result.data);
+      return result.ok ? { ok: true } : result;
+    },
+    [commitBrowserData, persistenceMode, replaceData],
+  );
+
   const saveSubjectNote = useCallback<AcademicDataContextValue["saveSubjectNote"]>(
     async (subjectId, body) => {
       if (persistenceMode === "browser") {
@@ -178,24 +216,14 @@ export function AcademicDataProvider({
 
   const syncNow = useCallback<AcademicDataContextValue["syncNow"]>(async () => {
     if (persistenceMode === "browser") {
-      const now = new Date().toISOString();
-      const saved = commitBrowserData((current) => ({
-        ...current,
-        syncStates: [{
-          entityType: "all",
-          state: "SUCCESS",
-          lastAttemptedAt: now,
-          lastSuccessfulAt: now,
-        }],
-      }));
-      return saved ? { ok: true } : { ok: false, errorCode: "UNKNOWN" };
+      return { ok: false, errorCode: "SYNC_FAILED" };
     }
     const result = await syncNowAction();
     if (result.ok) replaceData(result.data);
     return result.ok
       ? { ok: true, partial: result.partial }
       : { ok: false, errorCode: result.errorCode };
-  }, [commitBrowserData, persistenceMode, replaceData]);
+  }, [persistenceMode, replaceData]);
 
   const importTimetable = useCallback<AcademicDataContextValue["importTimetable"]>(
     async (sourceText) => {
@@ -236,8 +264,8 @@ export function AcademicDataProvider({
   );
 
   const value = useMemo(
-    () => ({ data, saveAssessment, saveTopic, saveSubjectNote, syncNow, importTimetable }),
-    [data, importTimetable, saveAssessment, saveSubjectNote, saveTopic, syncNow],
+    () => ({ data, persistenceMode, saveAssessment, saveTopic, createTopic, saveSubjectNote, syncNow, importTimetable }),
+    [createTopic, data, importTimetable, persistenceMode, saveAssessment, saveSubjectNote, saveTopic, syncNow],
   );
 
   return (
@@ -265,7 +293,7 @@ export function useAcademicData(): AcademicDataContextValue {
 
 async function mutateData(
   url: string,
-  method: "PATCH" | "PUT",
+  method: "PATCH" | "POST" | "PUT",
   body: Record<string, unknown>,
 ): Promise<
   | { ok: true; data: AcademicData }

@@ -58,4 +58,27 @@ describe("browser-local academic persistence", () => {
     expect(restored.timetableEvents.filter((event) => event.fingerprint === imported.fingerprint))
       .toHaveLength(1);
   });
+
+  it("restores user-created study topics without turning them into source data", () => {
+    const source = buildMockAcademicData(new Date("2026-08-29T00:00:00Z"));
+    const localState = extractLocalAcademicState(source);
+    const subject = source.subjects[0];
+    localState.createdStudyTopics = [{
+      id: "local-topic-normalisation",
+      subjectId: subject.id,
+      subjectCode: subject.code,
+      title: "Database normalisation",
+      confidence: 1,
+      completion: 0,
+      notes: "",
+      userCreated: true,
+    }];
+
+    const restored = applyLocalAcademicState(source, localState);
+    expect(restored.studyTopics).toContainEqual(expect.objectContaining({
+      id: "local-topic-normalisation",
+      title: "Database normalisation",
+      userCreated: true,
+    }));
+  });
 });

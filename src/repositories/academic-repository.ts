@@ -4,6 +4,7 @@ import type {
   Announcement,
   Assessment,
   AssessmentWorkflowStatus,
+  CourseFile,
   OfficialAssessmentStatus,
   ProviderKind,
   StudyTopic,
@@ -26,6 +27,11 @@ export async function hasAcademicData(): Promise<boolean> {
 
 export async function saveAcademicData(data: AcademicData): Promise<void> {
   await db.$transaction(async (tx) => {
+    await tx.subject.updateMany({
+      where: { provider: data.mode },
+      data: { current: false },
+    });
+
     for (const subject of data.subjects) {
       await tx.subject.upsert({
         where: {
@@ -42,6 +48,8 @@ export async function saveAcademicData(data: AcademicData): Promise<void> {
           name: subject.name,
           color: subject.color,
           progress: subject.progress,
+          currentScore: subject.currentScore,
+          finalScore: subject.finalScore,
           sourceUrl: subject.sourceUrl,
         },
         update: {
@@ -49,6 +57,8 @@ export async function saveAcademicData(data: AcademicData): Promise<void> {
           name: subject.name,
           color: subject.color,
           sourceUrl: subject.sourceUrl,
+          currentScore: subject.currentScore,
+          finalScore: subject.finalScore,
           current: true,
         },
       });
@@ -158,9 +168,39 @@ export async function saveAcademicData(data: AcademicData): Promise<void> {
       });
     }
 
+    for (const file of data.courseFiles) {
+      await tx.courseFileCache.upsert({
+        where: {
+          provider_externalId: {
+            provider: file.provider,
+            externalId: file.externalId,
+          },
+        },
+        create: {
+          id: file.id,
+          provider: file.provider,
+          externalId: file.externalId,
+          subjectId: file.subjectId,
+          name: file.name,
+          url: file.url,
+          contentType: file.contentType,
+          size: file.size,
+          updatedAt: file.updatedAt ? new Date(file.updatedAt) : null,
+        },
+        update: {
+          subjectId: file.subjectId,
+          name: file.name,
+          url: file.url,
+          contentType: file.contentType,
+          size: file.size,
+          updatedAt: file.updatedAt ? new Date(file.updatedAt) : null,
+        },
+      });
+    }
+
     for (const event of data.timetableEvents) {
       await tx.timetableEvent.upsert({
-        where: { fingerprint: event.fingerprint },
+        where: { id: event.id },
         create: {
           id: event.id,
           fingerprint: event.fingerprint,
@@ -176,6 +216,10 @@ export async function saveAcademicData(data: AcademicData): Promise<void> {
           source: event.source,
         },
         update: {
+          fingerprint: event.fingerprint,
+          provider: event.provider,
+          externalId: event.externalId,
+          subjectId: event.subjectId,
           title: event.title,
           subjectCode: event.subjectCode,
           location: event.location,
@@ -187,22 +231,25 @@ export async function saveAcademicData(data: AcademicData): Promise<void> {
       });
     }
 
-    const topicCount = await tx.studyTopic.count();
-    if (topicCount === 0) {
-      for (const topic of data.studyTopics) {
-        await tx.studyTopic.create({
-          data: {
-            id: topic.id,
-            subjectId: topic.subjectId,
-            title: topic.title,
-            confidence: topic.confidence,
-            completion: topic.completion,
-            notes: topic.notes,
-            lastReviewed: topic.lastReviewed ? new Date(topic.lastReviewed) : null,
-            nextReviewAt: topic.nextReviewAt ? new Date(topic.nextReviewAt) : null,
-          },
-        });
-      }
+    for (const topic of data.studyTopics) {
+      await tx.studyTopic.upsert({
+        where: { id: topic.id },
+        create: {
+          id: topic.id,
+          subjectId: topic.subjectId,
+          title: topic.title,
+          confidence: topic.confidence,
+          completion: topic.completion,
+          notes: topic.notes,
+          lastReviewed: topic.lastReviewed ? new Date(topic.lastReviewed) : null,
+          nextReviewAt: topic.nextReviewAt ? new Date(topic.nextReviewAt) : null,
+          userCreated: topic.userCreated ?? false,
+        },
+        update: {
+          subjectId: topic.subjectId,
+          title: topic.title,
+        },
+      });
     }
 
     for (const state of data.syncStates) {
@@ -219,7 +266,7 @@ export async function saveAcademicData(data: AcademicData): Promise<void> {
         update: {
           state: state.state,
           lastAttemptedAt: state.lastAttemptedAt ? new Date(state.lastAttemptedAt) : null,
-          lastSuccessfulAt: state.lastSuccessfulAt ? new Date(state.lastSuccessfulAt) : null,
+          lastSuccessfulAt: state.lastSuccessfulAt ? new Date(state.lastSuccessfulAt) : undefined,
           errorCode: state.errorCode,
         },
       });
@@ -231,7 +278,7 @@ export async function loadAcademicData(now = new Date()): Promise<AcademicData> 
   const canvasCount = await db.subject.count({ where: { provider: "canvas", current: true } });
   const activeProvider = canvasCount > 0 ? "canvas" : "mock";
 
-  const [subjectRows, assessmentRows, announcementRows, moduleRows, timetableRows, topicRows, noteRows, syncRows] =
+  const [subjectRows, assessmentRows, announcementRows, moduleRows, fileRows, timetableRows, topicRows, noteRows, syncRows] =
     await Promise.all([
       db.subject.findMany({ where: { provider: activeProvider, current: true }, orderBy: { code: "asc" } }),
       db.assessment.findMany({
@@ -247,6 +294,10 @@ export async function loadAcademicData(now = new Date()): Promise<AcademicData> 
       db.moduleCache.findMany({
         where: { subject: { provider: activeProvider, current: true } },
         orderBy: [{ subjectId: "asc" }, { position: "asc" }],
+      }),
+      db.courseFileCache.findMany({
+        where: { subject: { provider: activeProvider, current: true } },
+        orderBy: [{ subjectId: "asc" }, { name: "asc" }],
       }),
       db.timetableEvent.findMany({
         where: activeProvider === "canvas" ? { provider: { not: "mock" } } : undefined,
@@ -269,6 +320,8 @@ export async function loadAcademicData(now = new Date()): Promise<AcademicData> 
     name: row.name,
     color: row.color ?? "#0F6CBD",
     progress: row.progress,
+    currentScore: row.currentScore ?? undefined,
+    finalScore: row.finalScore ?? undefined,
     sourceUrl: row.sourceUrl ?? undefined,
     updatedAt: row.updatedAt.toISOString(),
   }));
@@ -316,6 +369,18 @@ export async function loadAcademicData(now = new Date()): Promise<AcademicData> 
     items: parseModuleItems(row.itemsJson),
   }));
 
+  const courseFiles: CourseFile[] = fileRows.map((row) => ({
+    id: row.id,
+    provider: providerKind(row.provider),
+    externalId: row.externalId,
+    subjectId: row.subjectId,
+    name: row.name,
+    url: row.url ?? undefined,
+    contentType: row.contentType ?? undefined,
+    size: row.size ?? undefined,
+    updatedAt: row.updatedAt?.toISOString(),
+  }));
+
   const timetableEvents: TimetableEvent[] = timetableRows.map((row) => ({
     id: row.id,
     fingerprint: row.fingerprint,
@@ -341,6 +406,7 @@ export async function loadAcademicData(now = new Date()): Promise<AcademicData> 
     notes: row.notes,
     lastReviewed: row.lastReviewed?.toISOString(),
     nextReviewAt: row.nextReviewAt?.toISOString(),
+    userCreated: row.userCreated,
   }));
 
   const syncStates: SyncSectionState[] = syncRows.map((row) => ({
@@ -356,6 +422,7 @@ export async function loadAcademicData(now = new Date()): Promise<AcademicData> 
     assessments,
     announcements,
     modules,
+    courseFiles,
     timetableEvents,
     studyTopics,
     subjectNotes: Object.fromEntries(
@@ -396,6 +463,19 @@ export async function updateStudyTopic(
       ...(values.markReviewed
         ? { lastReviewed: new Date(), nextReviewAt: new Date(Date.now() + 7 * 86_400_000) }
         : {}),
+    },
+  });
+}
+
+export async function createStudyTopic(values: { subjectId: string; title: string }): Promise<void> {
+  await db.studyTopic.create({
+    data: {
+      subjectId: values.subjectId,
+      title: values.title,
+      confidence: 1,
+      completion: 0,
+      notes: "",
+      userCreated: true,
     },
   });
 }

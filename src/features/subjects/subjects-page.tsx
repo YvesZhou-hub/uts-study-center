@@ -47,7 +47,10 @@ export function SubjectsPage() {
                       <span className="grid size-10 place-items-center rounded-xl text-sm font-bold" style={{ backgroundColor: subject.color, color: accessibleTextColor(subject.color) }}>
                         {subject.code.slice(-2)}
                       </span>
-                      <ArrowUpRight aria-hidden="true" className="size-4 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
+                      <div className="flex items-center gap-2">
+                        {subject.currentScore !== undefined ? <Badge variant="outline" className="font-normal">{t("subjects.currentGrade", { value: format.formatPercent(subject.currentScore) })}</Badge> : null}
+                        <ArrowUpRight aria-hidden="true" className="size-4 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
+                      </div>
                     </div>
                     <p className="mt-5 font-mono text-xs font-semibold text-primary">{subject.code}</p>
                     <h2 className="mt-1 min-h-12 text-base font-semibold leading-6">{subject.name}</h2>

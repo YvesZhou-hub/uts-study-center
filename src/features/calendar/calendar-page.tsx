@@ -137,27 +137,29 @@ function MonthView({ anchor, events }: { anchor: Date; events: DisplayEvent[] })
   const weekDays = eachDayOfInterval({ start: startOfWeek(new Date(), { weekStartsOn: 1 }), end: addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 6) });
 
   return (
-    <div className="min-w-[720px] overflow-x-auto">
-      <div className="grid grid-cols-7 border-b bg-muted/20">
+    <div className="overflow-x-auto">
+      <div className="min-w-[720px]">
+        <div className="grid grid-cols-7 border-b bg-muted/20">
         {weekDays.map((day) => <div key={day.toISOString()} className="px-2 py-2 text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{new Intl.DateTimeFormat(format.locale, { weekday: "short", timeZone: format.timeZone }).format(day)}</div>)}
-      </div>
-      <div className="grid grid-cols-7">
-        {range.map((day) => {
-          const dayEvents = events.filter((event) => isSameDay(new Date(event.startAt), day));
-          return (
-            <div key={day.toISOString()} className={cn("min-h-28 border-b border-r p-2 last:border-r-0", !isSameMonth(day, anchor) && "bg-muted/20 text-muted-foreground")}>
-              <time className={cn("grid size-6 place-items-center rounded-full text-[11px] font-medium", isSameDay(day, new Date()) && "bg-primary text-primary-foreground")}>{day.getDate()}</time>
-              <div className="mt-1 space-y-1">
-                {dayEvents.slice(0, 3).map((event) => (
-                  <div key={event.id} title={event.title} className={cn("truncate rounded px-1.5 py-1 text-[10px] font-medium", event.kind === "class" ? "bg-primary/10 text-primary" : "bg-amber-500/12 text-amber-800 dark:text-amber-300")}>
-                    {format.formatTime(event.startAt)} {event.subjectCode ?? event.title}
-                  </div>
-                ))}
-                {dayEvents.length > 3 ? <p className="px-1 text-[10px] text-muted-foreground">+{dayEvents.length - 3} {t("common.viewAll")}</p> : null}
+        </div>
+        <div className="grid grid-cols-7">
+          {range.map((day) => {
+            const dayEvents = events.filter((event) => isSameDay(new Date(event.startAt), day));
+            return (
+              <div key={day.toISOString()} className={cn("min-h-28 border-b border-r p-2 last:border-r-0", !isSameMonth(day, anchor) && "bg-muted/20 text-muted-foreground")}>
+                <time className={cn("grid size-6 place-items-center rounded-full text-[11px] font-medium", isSameDay(day, new Date()) && "bg-primary text-primary-foreground")}>{day.getDate()}</time>
+                <div className="mt-1 space-y-1">
+                  {dayEvents.slice(0, 3).map((event) => (
+                    <div key={event.id} title={event.title} className={cn("truncate rounded px-1.5 py-1 text-[10px] font-medium", event.kind === "class" ? "bg-primary/10 text-primary" : "bg-amber-500/12 text-amber-800 dark:text-amber-300")}>
+                      {format.formatTime(event.startAt)} {event.subjectCode ?? event.title}
+                    </div>
+                  ))}
+                  {dayEvents.length > 3 ? <p className="px-1 text-[10px] text-muted-foreground">+{dayEvents.length - 3} {t("common.viewAll")}</p> : null}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );

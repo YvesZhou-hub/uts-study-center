@@ -31,6 +31,8 @@ export interface Subject {
   name: string;
   color: string;
   progress: number;
+  currentScore?: number;
+  finalScore?: number;
   sourceUrl?: string;
   updatedAt: string;
 }
@@ -79,6 +81,18 @@ export interface SubjectModule {
   items: Array<{ id: string; title: string; type: string }>;
 }
 
+export interface CourseFile {
+  id: string;
+  provider: ProviderKind;
+  externalId: string;
+  subjectId: string;
+  name: string;
+  url?: string;
+  contentType?: string;
+  size?: number;
+  updatedAt?: string;
+}
+
 export interface TimetableEvent {
   id: string;
   fingerprint: string;
@@ -104,6 +118,7 @@ export interface StudyTopic {
   notes: string;
   lastReviewed?: string;
   nextReviewAt?: string;
+  userCreated?: boolean;
 }
 
 export type PriorityReason =
@@ -134,6 +149,7 @@ export interface AcademicData {
   assessments: Assessment[];
   announcements: Announcement[];
   modules: SubjectModule[];
+  courseFiles: CourseFile[];
   timetableEvents: TimetableEvent[];
   studyTopics: StudyTopic[];
   subjectNotes: Record<string, string>;

@@ -23,6 +23,7 @@ export const metadata: Metadata = {
     template: "%s · UTS Study Center",
   },
   description: "A bilingual, local-first academic workspace for UTS students.",
+  robots: { index: false, follow: false },
 };
 
 export const dynamic = "force-dynamic";

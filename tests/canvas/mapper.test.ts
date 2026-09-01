@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapCanvasAssignment, mapCanvasCourse } from "@/integrations/canvas/mapper";
+import { mapCanvasAssignment, mapCanvasCourse, mapCanvasFile } from "@/integrations/canvas/mapper";
 
 describe("Canvas DTO mapping", () => {
   it("maps external course fields into a provider-independent subject", () => {
@@ -36,6 +36,26 @@ describe("Canvas DTO mapping", () => {
       officialStatus: "SUBMITTED",
       workflowStatus: "SUBMITTED",
       completion: 100,
+    });
+  });
+
+  it("maps course files without exposing Canvas response fields to the UI", () => {
+    const subject = mapCanvasCourse({ id: 123, name: "Web Systems", course_code: "31268" });
+    expect(mapCanvasFile({
+      id: 99,
+      display_name: "Project specification.pdf",
+      url: "https://canvas.example.edu/files/99/download",
+      content_type: "application/pdf",
+      size: 42_000,
+    }, subject)).toEqual({
+      id: "canvas-file-99",
+      provider: "canvas",
+      externalId: "99",
+      subjectId: subject.id,
+      name: "Project specification.pdf",
+      url: "https://canvas.example.edu/files/99/download",
+      contentType: "application/pdf",
+      size: 42_000,
     });
   });
 });

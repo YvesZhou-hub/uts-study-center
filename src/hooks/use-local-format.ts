@@ -46,6 +46,23 @@ export function useLocalFormat() {
           style: "percent",
           maximumFractionDigits: 0,
         }).format(value / 100),
+      formatFileSize: (value: number) => {
+        const megabytes = value / 1_000_000;
+        if (megabytes >= 1) {
+          return new Intl.NumberFormat(locale, {
+            style: "unit",
+            unit: "megabyte",
+            unitDisplay: "short",
+            maximumFractionDigits: 1,
+          }).format(megabytes);
+        }
+        return new Intl.NumberFormat(locale, {
+          style: "unit",
+          unit: "kilobyte",
+          unitDisplay: "short",
+          maximumFractionDigits: 0,
+        }).format(value / 1_000);
+      },
       dateKey: (value: string | Date) =>
         new Intl.DateTimeFormat("en-CA", {
           timeZone,

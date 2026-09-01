@@ -4,11 +4,13 @@ import { parseTimetableIcs } from "@/integrations/timetable/parser";
 import { toApplicationError } from "@/lib/errors";
 import { logEvent } from "@/lib/logger";
 import { loadAcademicData, saveTimetableEvents } from "@/repositories/academic-repository";
+import { assertTrustedMutation } from "@/lib/http-security";
 
 const payloadSchema = z.object({ sourceText: z.string().min(1).max(2_000_000) });
 
 export async function POST(request: Request) {
   try {
+    assertTrustedMutation(request, 2_100_000);
     const { sourceText } = payloadSchema.parse(await request.json());
     const current = await loadAcademicData();
     const events = parseTimetableIcs(sourceText, { subjects: current.subjects });

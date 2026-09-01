@@ -14,17 +14,23 @@ export interface TimetableParseOptions {
   windowEnd?: Date;
 }
 
+const MAX_SOURCE_LENGTH = 2_000_000;
+const MAX_EVENTS = 10_000;
+
 export function parseTimetableIcs(
   sourceText: string,
   options: TimetableParseOptions = {},
 ): TimetableEvent[] {
-  if (!sourceText.includes("BEGIN:VCALENDAR")) {
+  if (sourceText.length > MAX_SOURCE_LENGTH || !sourceText.includes("BEGIN:VCALENDAR")) {
     throw new ApplicationError("TIMETABLE_PARSE_FAILED", "Input is not an iCalendar file");
   }
 
   try {
     const calendar = ICAL.Component.fromString(sourceText);
     const components = calendar.getAllSubcomponents("vevent");
+    if (components.length > MAX_EVENTS) {
+      throw new ApplicationError("TIMETABLE_PARSE_FAILED", "Calendar contains too many events");
+    }
     const subjectsByCode = new Map((options.subjects ?? []).map((subject) => [subject.code, subject]));
     const windowStart = options.windowStart ?? subMonths(new Date(), 3);
     const windowEnd = options.windowEnd ?? addYears(new Date(), 1);
@@ -51,12 +57,18 @@ export function parseTimetableIcs(
               subjectsByCode,
             ),
           );
+          if (events.length > MAX_EVENTS) {
+            throw new ApplicationError("TIMETABLE_PARSE_FAILED", "Calendar expands to too many events");
+          }
         }
       } else {
         const startAt = event.startDate.toJSDate();
         const endAt = event.endDate.toJSDate();
         if (endAt >= windowStart && startAt <= windowEnd) {
           events.push(normalizeEvent(event, startAt, endAt, subjectsByCode));
+          if (events.length > MAX_EVENTS) {
+            throw new ApplicationError("TIMETABLE_PARSE_FAILED", "Calendar contains too many events");
+          }
         }
       }
     }
